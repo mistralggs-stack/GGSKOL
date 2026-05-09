@@ -173,6 +173,14 @@ select.ctrl:focus{border-color:var(--red)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;font-family:var(--mono);font-size:12px;padding:10px 16px;border-radius:var(--r);z-index:999;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;max-width:300px}
 .toast.show{opacity:1;transform:translateY(0)}
 
+/* SEEDING STATUS */
+.s-badge{display:inline-block;font-size:11px;font-family:var(--mono);font-weight:500;padding:3px 10px;border-radius:20px;white-space:nowrap}
+.s-diproses{background:#fef9c3;color:#854d0e;border:1px solid #fde047}
+.s-dikirim{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+.s-diterima{background:#dcfce7;color:#166534;border:1px solid #86efac}
+.s-review{background:var(--red-dim);color:var(--red);border:1px solid var(--red-mid)}
+.s-batal{background:var(--bg3);color:var(--muted);border:1px solid var(--border2)}
+
 @media(max-width:600px){
   .topbar,.page{padding-left:14px;padding-right:14px}
   .topbar{height:auto;padding-top:10px;padding-bottom:10px;flex-wrap:wrap}
@@ -191,6 +199,7 @@ select.ctrl:focus{border-color:var(--red)}
   </div>
   <div class="tabs">
     <div class="tab active" onclick="goTab('db',this)">Database</div>
+    <div class="tab" onclick="goTab('seeding',this)">Seeding</div>
     <div class="tab" onclick="goTab('chart',this)">Comparison Chart</div>
   </div>
   <div class="topbar-right">
@@ -237,7 +246,109 @@ select.ctrl:focus{border-color:var(--red)}
   </div>
 </div>
 
-<!-- CHART TAB -->
+<!-- SEEDING TAB -->
+<div id="page-seeding" class="page">
+  <div class="stats-bar" id="seeding-stats"></div>
+
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <button class="btn btn-red" onclick="openSeeding()">+ Tambah Seeding</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span class="flabel">Filter:</span>
+      <select class="ctrl" id="seed-filter-period" onchange="renderSeeding()" style="font-family:var(--mono);font-size:12px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);outline:none">
+        <option value="all">Semua periode</option>
+        <option value="7">7 hari terakhir</option>
+        <option value="30">30 hari terakhir</option>
+        <option value="90">3 bulan terakhir</option>
+      </select>
+      <select class="ctrl" id="seed-filter-status" onchange="renderSeeding()" style="font-family:var(--mono);font-size:12px;padding:6px 10px;border:1px solid var(--border2);border-radius:var(--r);background:var(--bg);color:var(--text);outline:none">
+        <option value="all">Semua status</option>
+        <option value="Diproses">Diproses</option>
+        <option value="Dikirim">Dikirim</option>
+        <option value="Diterima">Diterima</option>
+        <option value="Sudah Review">Sudah Review</option>
+        <option value="Batal">Batal</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th onclick="srtSeed('tanggal')">Tanggal Kirim <span id="ss-tanggal"></span></th>
+          <th onclick="srtSeed('nama')">Nama KOL <span id="ss-nama"></span></th>
+          <th>ID Sosmed</th>
+          <th onclick="srtSeed('barang')">Barang Dikirim <span id="ss-barang"></span></th>
+          <th>Ekspedisi</th>
+          <th>No. Resi</th>
+          <th>Alamat Kirim</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="seed-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SEEDING MODAL -->
+<div class="overlay" id="ov-seed" onclick="ovSeedClose(event)">
+  <div class="modal">
+    <div class="mhdr">
+      <div class="mtitle" id="seed-modal-title">Tambah Seeding</div>
+      <button class="mclose" onclick="closeSeedModal()">×</button>
+    </div>
+    <div class="fgrid">
+      <div class="fg">
+        <label>Nama KOL *</label>
+        <input type="text" id="s-nama" placeholder="cth: jebsvibe" list="kol-list">
+        <datalist id="kol-list"></datalist>
+      </div>
+      <div class="fg">
+        <label>ID Sosmed</label>
+        <input type="text" id="s-sosmed" placeholder="cth: @jebsvibe / TikTok">
+      </div>
+      <div class="fg">
+        <label>Tanggal Kirim *</label>
+        <input type="date" id="s-tanggal">
+      </div>
+      <div class="fg">
+        <label>Status</label>
+        <select id="s-status">
+          <option value="Diproses">Diproses</option>
+          <option value="Dikirim">Dikirim</option>
+          <option value="Diterima">Diterima</option>
+          <option value="Sudah Review">Sudah Review</option>
+          <option value="Batal">Batal</option>
+        </select>
+      </div>
+      <div class="fg full">
+        <label>Barang yang Dikirim *</label>
+        <input type="text" id="s-barang" placeholder="cth: GGS Keyboard K1 Wireless, Mouse Pad XL">
+      </div>
+      <div class="fg">
+        <label>Ekspedisi</label>
+        <input type="text" id="s-ekspedisi" placeholder="cth: JNE, J&T, SiCepat, Gosend">
+      </div>
+      <div class="fg">
+        <label>No. Resi</label>
+        <input type="text" id="s-resi" placeholder="cth: JNE123456789">
+      </div>
+      <div class="fg full">
+        <label>Alamat Kirim</label>
+        <input type="text" id="s-alamat" placeholder="cth: Jl. Sudirman No.1, Jakarta Selatan">
+      </div>
+      <div class="fg full">
+        <label>Catatan</label>
+        <input type="text" id="s-notes" placeholder="cth: minta review dalam 2 minggu, unboxing video">
+      </div>
+    </div>
+    <div class="mfooter">
+      <button class="btn" onclick="closeSeedModal()">Batal</button>
+      <button class="btn btn-red" onclick="saveSeed()">Simpan</button>
+    </div>
+  </div>
+</div>
 <div id="page-chart" class="page">
   <div class="chart-header">
     <h2>Comparison Chart</h2>
@@ -446,6 +557,7 @@ function goTab(id,el){
   el.classList.add('active');
   document.getElementById('page-'+id).classList.add('active');
   if(id==='chart'){buildPills();drawCharts();}
+  if(id==='seeding'){renderSeeding();}
 }
 
 // ---- FILTERS ----
@@ -793,7 +905,156 @@ function drawCharts(){
   });
 }
 
-// ---- EXPORT / IMPORT ----
+// ---- SEEDING ----
+let seedDb=JSON.parse(localStorage.getItem('ggs_seed')||'[]');
+let seedEditId=null;
+let seedSk='tanggal',seedSd='desc';
+
+function persistSeed(){localStorage.setItem('ggs_seed',JSON.stringify(seedDb));}
+
+function srtSeed(k){
+  if(seedSk===k)seedSd=seedSd==='asc'?'desc':'asc';
+  else{seedSk=k;seedSd='desc';}
+  renderSeeding();
+}
+
+function getSeedFiltered(){
+  const period=document.getElementById('seed-filter-period').value;
+  const status=document.getElementById('seed-filter-status').value;
+  const cutoff=period!=='all'?Date.now()-parseInt(period)*864e5:0;
+  return seedDb.filter(s=>{
+    const mp=!cutoff||(new Date(s.tanggal).getTime()>=cutoff);
+    const ms=status==='all'||s.status===status;
+    return mp&&ms;
+  }).sort((a,b)=>{
+    const av=a[seedSk]||'',bv=b[seedSk]||'';
+    return seedSd==='asc'?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+  });
+}
+
+function statusBadge(s){
+  const map={'Diproses':'s-diproses','Dikirim':'s-dikirim','Diterima':'s-diterima','Sudah Review':'s-review','Batal':'s-batal'};
+  return '<span class="s-badge '+(map[s]||'s-batal')+'">'+s+'</span>';
+}
+
+function renderSeedingStats(){
+  const total=seedDb.length;
+  const dikirim=seedDb.filter(s=>s.status==='Dikirim'||s.status==='Diterima'||s.status==='Sudah Review').length;
+  const review=seedDb.filter(s=>s.status==='Sudah Review').length;
+  const proses=seedDb.filter(s=>s.status==='Diproses').length;
+  // count unique barang
+  const cut30=Date.now()-30*864e5;
+  const bulan=seedDb.filter(s=>new Date(s.tanggal).getTime()>=cut30).length;
+  document.getElementById('seeding-stats').innerHTML=
+    '<div class="stat"><div class="stat-n red">'+total+'</div><div class="stat-l">Total Seeding</div></div>'+
+    '<div class="stat"><div class="stat-n">'+bulan+'</div><div class="stat-l">30 Hari Terakhir</div></div>'+
+    '<div class="stat"><div class="stat-n">'+proses+'</div><div class="stat-l">Diproses</div></div>'+
+    '<div class="stat"><div class="stat-n">'+dikirim+'</div><div class="stat-l">Terkirim</div></div>'+
+    '<div class="stat"><div class="stat-n green">'+review+'</div><div class="stat-l">Sudah Review</div></div>';
+}
+
+function renderSeeding(){
+  renderSeedingStats();
+  ['tanggal','nama','barang'].forEach(k=>{
+    const el=document.getElementById('ss-'+k);
+    if(el)el.textContent=seedSk===k?(seedSd==='asc'?'↑':'↓'):'';
+  });
+  const data=getSeedFiltered();
+  const tb=document.getElementById('seed-tbody');
+  if(!data.length){
+    tb.innerHTML='<tr class="empty-row"><td colspan="9">Belum ada data seeding. Klik "+ Tambah Seeding" untuk mulai.</td></tr>';
+    return;
+  }
+  tb.innerHTML=data.map(s=>{
+    const tgl=s.tanggal?new Date(s.tanggal).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'—';
+    const resiHtml=s.resi?'<span style="font-family:var(--mono);font-size:11px">'+s.resi+'</span>':'<span style="color:var(--muted)">—</span>';
+    const alamatHtml=s.alamat?'<div style="font-size:12px;color:var(--muted2);max-width:180px;line-height:1.4">'+s.alamat+'</div>':'<span style="color:var(--muted)">—</span>';
+    const notesHtml=s.notes?'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+s.notes+'</div>':'';
+    return '<tr>'+
+      '<td style="white-space:nowrap;font-family:var(--mono);font-size:12px">'+tgl+'</td>'+
+      '<td><div style="font-weight:500;font-size:13px">'+s.nama+'</div></td>'+
+      '<td style="font-family:var(--mono);font-size:12px;color:var(--muted2)">'+( s.sosmed||'—')+'</td>'+
+      '<td><div style="font-size:13px;font-weight:500;max-width:200px">'+s.barang+'</div>'+notesHtml+'</td>'+
+      '<td style="font-size:12px;color:var(--muted2);white-space:nowrap">'+(s.ekspedisi||'—')+'</td>'+
+      '<td>'+resiHtml+'</td>'+
+      '<td>'+alamatHtml+'</td>'+
+      '<td>'+statusBadge(s.status)+'</td>'+
+      '<td><div class="row-acts">'+
+        '<button class="act-btn" onclick="openSeedEdit(\''+s.id+'\')">Edit</button>'+
+        '<button class="act-btn del" onclick="delSeed(\''+s.id+'\')">Hapus</button>'+
+      '</div></td>'+
+      '</tr>';
+  }).join('');
+}
+
+function openSeeding(){
+  seedEditId=null;
+  document.getElementById('seed-modal-title').textContent='Tambah Seeding';
+  ['s-nama','s-sosmed','s-barang','s-ekspedisi','s-resi','s-alamat','s-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('s-tanggal').value=new Date().toISOString().slice(0,10);
+  document.getElementById('s-status').value='Diproses';
+  // populate datalist from db
+  const dl=document.getElementById('kol-list');
+  dl.innerHTML=db.map(r=>'<option value="'+r.name+'" data-sosmed="@'+r.name+' / '+r.platform+'">').join('');
+  // auto-fill sosmed on name input
+  document.getElementById('s-nama').oninput=function(){
+    const r=db.find(x=>x.name.toLowerCase()===this.value.toLowerCase());
+    if(r) document.getElementById('s-sosmed').value='@'+r.name+' / '+r.platform;
+  };
+  document.getElementById('ov-seed').classList.add('open');
+  setTimeout(()=>document.getElementById('s-nama').focus(),50);
+}
+
+function openSeedEdit(id){
+  seedEditId=id;
+  const s=seedDb.find(x=>x.id===id);
+  document.getElementById('seed-modal-title').textContent='Edit Seeding';
+  document.getElementById('s-nama').value=s.nama||'';
+  document.getElementById('s-sosmed').value=s.sosmed||'';
+  document.getElementById('s-tanggal').value=s.tanggal||'';
+  document.getElementById('s-status').value=s.status||'Diproses';
+  document.getElementById('s-barang').value=s.barang||'';
+  document.getElementById('s-ekspedisi').value=s.ekspedisi||'';
+  document.getElementById('s-resi').value=s.resi||'';
+  document.getElementById('s-alamat').value=s.alamat||'';
+  document.getElementById('s-notes').value=s.notes||'';
+  document.getElementById('ov-seed').classList.add('open');
+}
+
+function saveSeed(){
+  const nama=document.getElementById('s-nama').value.trim();
+  const barang=document.getElementById('s-barang').value.trim();
+  const tanggal=document.getElementById('s-tanggal').value;
+  if(!nama||!barang||!tanggal){toast('Nama, barang, dan tanggal wajib diisi!','err');return;}
+  const data={
+    nama,barang,tanggal,
+    sosmed:document.getElementById('s-sosmed').value.trim(),
+    status:document.getElementById('s-status').value,
+    ekspedisi:document.getElementById('s-ekspedisi').value.trim(),
+    resi:document.getElementById('s-resi').value.trim(),
+    alamat:document.getElementById('s-alamat').value.trim(),
+    notes:document.getElementById('s-notes').value.trim(),
+  };
+  if(seedEditId){
+    const i=seedDb.findIndex(x=>x.id===seedEditId);
+    if(i>-1)seedDb[i]=Object.assign({},seedDb[i],data);
+    toast('Seeding diupdate!');
+  }else{
+    seedDb.unshift(Object.assign({id:uid()},data));
+    toast('Seeding ditambahkan!');
+  }
+  persistSeed();closeSeedModal();renderSeeding();
+}
+
+function delSeed(id){
+  const s=seedDb.find(x=>x.id===id);
+  if(!confirm('Hapus seeding "'+s.barang+'" ke '+s.nama+'?'))return;
+  seedDb=seedDb.filter(x=>x.id!==id);
+  persistSeed();renderSeeding();toast('Dihapus.');
+}
+
+function closeSeedModal(){document.getElementById('ov-seed').classList.remove('open');seedEditId=null;}
+function ovSeedClose(e){if(e.target===document.getElementById('ov-seed'))closeSeedModal();}
 function doExport(){
   const blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ggs-kol.json';a.click();
