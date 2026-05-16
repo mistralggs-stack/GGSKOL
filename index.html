@@ -511,51 +511,76 @@ select.ctrl:focus{border-color:var(--red)}
 <div class="toast" id="toast"></div>
 
 <script>
+// ---- SUPABASE CONFIG ----
+const SB_URL='https://hwqckbnjfxvehyaatkwi.supabase.co';
+const SB_KEY='sb_publishable_C2RZaZgM4YsntZ_oQEqtMA_ajgfiL43';
+
+async function sbFetch(path,method='GET',body=null){
+  const opts={method,headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'}};
+  if(body)opts.body=JSON.stringify(body);
+  const res=await fetch(SB_URL+'/rest/v1/'+path,opts);
+  if(!res.ok){const t=await res.text();throw new Error(t);}
+  const txt=await res.text();
+  return txt?JSON.parse(txt):[];
+}
+
+async function sbLoadKOL(){
+  const rows=await sbFetch('kol?order=follower_raw.desc');
+  return rows.map(r=>({...r,snapshots:r.snapshots||[],categories:r.categories||[]}));
+}
+async function sbSaveKOL(r){
+  // upsert single row
+  await sbFetch('kol?on_conflict=id','POST',[{
+    id:r.id,name:r.name,platform:r.platform,handle:r.handle||'',
+    followers:r.followers,follower_raw:r.follower_raw,
+    er:r.er||'',er_raw:r.er_raw||0,
+    categories:r.categories||[],phone:r.phone||'',
+    notes:r.notes||'',link:r.link||'',
+    snapshots:r.snapshots||[],
+    last_updated:r.lastUpdated||Date.now()
+  }]);
+}
+async function sbDeleteKOL(id){
+  await sbFetch('kol?id=eq.'+id,'DELETE');
+}
+async function sbLoadSeeding(){
+  return await sbFetch('seeding?order=tanggal.desc');
+}
+async function sbSaveSeeding(s){
+  await sbFetch('seeding?on_conflict=id','POST',[{
+    id:s.id,nama:s.nama,sosmed:s.sosmed||'',tanggal:s.tanggal,
+    barang:s.barang,ekspedisi:s.ekspedisi||'',resi:s.resi||'',
+    alamat:s.alamat||'',status:s.status,notes:s.notes||''
+  }]);
+}
+async function sbDeleteSeeding(id){
+  await sbFetch('seeding?id=eq.'+id,'DELETE');
+}
+async function sbInitSeedData(rows){
+  // bulk upsert seed data
+  await sbFetch('kol?on_conflict=id','POST',rows);
+}
+const COLORS=['#d42b2b','#111111','#555555','#888888','#b05020','#334455','#777','#993333','#445566','#666'];
+const PLAT_CLS={Instagram:'ig',TikTok:'tt',YouTube:'yt'};
+
 const CATS_ALL=['Gaming','Tech','Lifestyle','Beauty','Food'];
 const COLORS=['#d42b2b','#111111','#555555','#888888','#b05020','#334455','#777','#993333','#445566','#666'];
 const PLAT_CLS={Instagram:'ig',TikTok:'tt',YouTube:'yt'};
 
 // ---- DATA ----
-let db=JSON.parse(localStorage.getItem('ggs_kol')||'null');
-if(!db){
-  const seed=[
-    ['gotchulabs.indo','TikTok',7935,'','Tech,Gaming','+62 813-8838-2082',''],
-    ['ulersakti','Instagram',6815,'','Gaming','+62 813-2125-5025',''],
-    ['1Minute_Setup','TikTok',6458,'','Gaming,Lifestyle,Tech','+62 851-9007-1772',''],
-    ['Pakikan keebs','TikTok',4359,'','Gaming','+62 877-8410-7768',''],
-    ['gotchulabs.id','Instagram',637,'','Tech,Gaming','+62 813-8838-2082',''],
-    ['Gotchu Labs ID','YouTube',398000,'','Tech,Gaming','+62 813-8838-2082',''],
-    ['ulersakti','YouTube',122000,'','Gaming','+62 813-2125-5025',''],
-    ['oppagemes','TikTok',83000,'','Gaming,Lifestyle,Tech','+62 813-9917-3008',''],
-    ['1minute_setup','Instagram',44,'','Gaming,Lifestyle,Tech','+62 851-9007-1772',''],
-    ['edwardtanujayaa','Instagram',42000,'','Lifestyle,Tech,Gaming','',''],
-    ['jebsvibe','Instagram',35000,'','Tech,Lifestyle,Gaming','+62 819-0922-5060',''],
-    ['aa.salam','TikTok',22500,'','Gaming','+62 819-3026-3311',''],
-    ['pigman.id','TikTok',21900,'','Gaming','+62 823-2433-7657',''],
-    ['jebsvibe','TikTok',15000,'','Lifestyle,Gaming,Tech','+62 819-0922-5060',''],
-    ['keeboard.id','TikTok',14400,'','Gaming','+62 819-3026-3311',''],
-    ['Jebsvibe - Tech Review','YouTube',1890,'','Gaming,Tech,Lifestyle','+62 819-0922-5060',''],
-  ];
-  db=seed.map(([name,platform,fol,er,cats,phone,notes])=>({
-    id:uid(),name,platform,
-    follower_raw:fol,followers:fmtF(fol),
-    er_raw:er?parseFloat(er):0,er:er||'',
-    categories:cats?cats.split(','):[],
-    phone,notes,link:'',
-    snapshots:[{ts:Date.now(),date:toDay(),followers:fol,er:er?parseFloat(er):0,note:'Initial data'}],
-    lastUpdated:Date.now()
-  }));
-  persist();
-}
-
+let db=[];
+let seedDb=[];
 let filters={p:'all',c:'all'};
 let sk='follower_raw',sd='desc';
-let curId=null; // for modal
+let curId=null;
 let selKOL=[];
 let charts={};
+let seedEditId=null;
+let seedSk='tanggal',seedSd='desc';
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-function persist(){localStorage.setItem('ggs_kol',JSON.stringify(db))}
+function persist(){}// no-op, now using Supabase
+function persistSeed(){}// no-op
 function toDay(){return new Date().toISOString().slice(0,10)}
 function fmtF(n){
   n=parseInt(n)||0;
@@ -573,6 +598,61 @@ function parsF(s){
 function initials(n){return n.split(/[\s._\-]+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'}
 function fmtDate(ts){return new Date(ts).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}
 
+// ---- SEED DATA (first time only) ----
+const SEED_DATA=[
+  ['gotchulabs.indo','TikTok',7935,'','Tech,Gaming','+62 813-8838-2082',''],
+  ['ulersakti','Instagram',6815,'','Gaming','+62 813-2125-5025',''],
+  ['1Minute_Setup','TikTok',6458,'','Gaming,Lifestyle,Tech','+62 851-9007-1772',''],
+  ['Pakikan keebs','TikTok',4359,'','Gaming','+62 877-8410-7768',''],
+  ['gotchulabs.id','Instagram',637,'','Tech,Gaming','+62 813-8838-2082',''],
+  ['Gotchu Labs ID','YouTube',398000,'','Tech,Gaming','+62 813-8838-2082',''],
+  ['ulersakti','YouTube',122000,'','Gaming','+62 813-2125-5025',''],
+  ['oppagemes','TikTok',83000,'','Gaming,Lifestyle,Tech','+62 813-9917-3008',''],
+  ['1minute_setup','Instagram',44,'','Gaming,Lifestyle,Tech','+62 851-9007-1772',''],
+  ['edwardtanujayaa','Instagram',42000,'','Lifestyle,Tech,Gaming','',''],
+  ['jebsvibe','Instagram',35000,'','Tech,Lifestyle,Gaming','+62 819-0922-5060',''],
+  ['aa.salam','TikTok',22500,'','Gaming','+62 819-3026-3311',''],
+  ['pigman.id','TikTok',21900,'','Gaming','+62 823-2433-7657',''],
+  ['jebsvibe','TikTok',15000,'','Lifestyle,Gaming,Tech','+62 819-0922-5060',''],
+  ['keeboard.id','TikTok',14400,'','Gaming','+62 819-3026-3311',''],
+  ['Jebsvibe - Tech Review','YouTube',1890,'','Gaming,Tech,Lifestyle','+62 819-0922-5060',''],
+];
+
+async function initApp(){
+  // Show loading
+  document.getElementById('tbody').innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--muted)">Memuat data...</td></tr>';
+  try{
+    db=await sbLoadKOL();
+    // First time: seed data if empty
+    if(db.length===0){
+      const rows=SEED_DATA.map(([name,platform,fol,er,cats,phone,notes])=>({
+        id:uid(),name,platform,handle:'',
+        follower_raw:fol,followers:fmtF(fol),
+        er_raw:er?parseFloat(er):0,er:er||'',
+        categories:cats?cats.split(','):[],
+        phone,notes,link:'',
+        snapshots:[{ts:Date.now(),date:toDay(),followers:fol,er:0,note:'Initial data'}],
+        last_updated:Date.now()
+      }));
+      await sbInitSeedData(rows.map(r=>({
+        id:r.id,name:r.name,platform:r.platform,handle:r.handle,
+        followers:r.followers,follower_raw:r.follower_raw,
+        er:r.er,er_raw:r.er_raw,categories:r.categories,
+        phone:r.phone,notes:r.notes,link:r.link,
+        snapshots:r.snapshots,last_updated:r.last_updated
+      })));
+      db=rows;
+    }
+    // normalize
+    db=db.map(r=>({...r,lastUpdated:r.last_updated,snapshots:r.snapshots||[],categories:r.categories||[]}));
+    seedDb=await sbLoadSeeding();
+    render();
+  }catch(e){
+    document.getElementById('tbody').innerHTML='<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--red)">Gagal konek ke database: '+e.message+'</td></tr>';
+    console.error(e);
+  }
+}
+
 // ---- TABS ----
 function goTab(id,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -580,7 +660,9 @@ function goTab(id,el){
   el.classList.add('active');
   document.getElementById('page-'+id).classList.add('active');
   if(id==='chart'){buildPills();drawCharts();}
-  if(id==='seeding'){renderSeeding();}
+  if(id==='seeding'){
+    sbLoadSeeding().then(data=>{seedDb=data;renderSeeding();}).catch(e=>toast('Gagal load seeding','err'));
+  }
 }
 
 // ---- FILTERS ----
@@ -723,7 +805,7 @@ function delSnap(id,idx){
   render();
 }
 
-function saveUpdate(){
+async function saveUpdate(){
   const r=db.find(x=>x.id===curId);
   if(!r)return;
   const folStr=document.getElementById('u-followers').value.trim();
@@ -739,8 +821,11 @@ function saveUpdate(){
   if(!r.snapshots)r.snapshots=[];
   r.snapshots.push({ts:Date.now(),date:toDay(),followers:fol,er:er?parseFloat(er):0,note});
   if(r.snapshots.length>365)r.snapshots=r.snapshots.slice(-365);
-  persist();closeModal();render();
-  toast(r.name+' diupdate → '+fmtF(fol)+' followers');
+  try{
+    await sbSaveKOL(r);
+    closeModal();render();
+    toast(r.name+' diupdate → '+fmtF(fol)+' followers');
+  }catch(e){toast('Gagal simpan: '+e.message,'err');}
 }
 
 // ---- MODAL: ADD/EDIT ----
@@ -776,44 +861,43 @@ function clearEditForm(){
   document.getElementById('e-platform').value='Instagram';
   CATS_ALL.forEach(c=>document.getElementById('cc-'+c.toLowerCase()).checked=false);
 }
-function saveEdit(){
+async function saveEdit(){
   const name=document.getElementById('e-name').value.trim();
   if(!name){toast('Nama wajib diisi!','err');return;}
   const fol=document.getElementById('e-followers').value.trim();
   const er=document.getElementById('e-er').value.trim();
   const cats=CATS_ALL.filter(c=>document.getElementById('cc-'+c.toLowerCase()).checked);
   const folRaw=parsF(fol);
-  if(curId){
-    const i=db.findIndex(x=>x.id===curId);
-    if(i>-1)Object.assign(db[i],{
-      name,platform:document.getElementById('e-platform').value,
-      followers:fol||fmtF(folRaw),follower_raw:folRaw,
-      er,er_raw:parseFloat(er)||0,categories:cats,
-      phone:document.getElementById('e-phone').value.trim(),
-      link:document.getElementById('e-link').value.trim(),
-      notes:document.getElementById('e-notes').value.trim(),
-    });
-    toast('Data diupdate!');
-  }else{
-    db.unshift({
-      id:uid(),name,platform:document.getElementById('e-platform').value,
-      followers:fol||'0',follower_raw:folRaw,
-      er,er_raw:parseFloat(er)||0,categories:cats,
-      phone:document.getElementById('e-phone').value.trim(),
-      link:document.getElementById('e-link').value.trim(),
-      notes:document.getElementById('e-notes').value.trim(),
-      snapshots:folRaw?[{ts:Date.now(),date:toDay(),followers:folRaw,er:parseFloat(er)||0,note:'Initial'}]:[],
-      lastUpdated:Date.now()
-    });
-    toast('KOL ditambahkan!');
-  }
-  persist();closeModal();render();
+  const rec={
+    name,platform:document.getElementById('e-platform').value,
+    handle:document.getElementById('e-handle')?document.getElementById('e-handle').value.trim():'',
+    followers:fol||fmtF(folRaw),follower_raw:folRaw,
+    er,er_raw:parseFloat(er)||0,categories:cats,
+    phone:document.getElementById('e-phone').value.trim(),
+    link:document.getElementById('e-link').value.trim(),
+    notes:document.getElementById('e-notes').value.trim(),
+  };
+  try{
+    if(curId){
+      const i=db.findIndex(x=>x.id===curId);
+      if(i>-1){db[i]=Object.assign({},db[i],rec,{lastUpdated:Date.now()});}
+      await sbSaveKOL(db[i>-1?i:0]);
+      toast('Data diupdate!');
+    }else{
+      const newRec=Object.assign({id:uid(),snapshots:folRaw?[{ts:Date.now(),date:toDay(),followers:folRaw,er:parseFloat(er)||0,note:'Initial'}]:[],lastUpdated:Date.now()},rec);
+      db.unshift(newRec);
+      await sbSaveKOL(newRec);
+      toast('KOL ditambahkan!');
+    }
+    closeModal();render();
+  }catch(e){toast('Gagal simpan: '+e.message,'err');}
 }
-function doDelete(id){
+async function doDelete(id){
   const r=db.find(x=>x.id===id);
   if(!confirm('Hapus "'+r.name+'"?'))return;
   db=db.filter(x=>x.id!==id);
-  persist();render();toast('Dihapus.');
+  try{await sbDeleteKOL(id);}catch(e){toast('Gagal hapus: '+e.message,'err');return;}
+  render();toast('Dihapus.');
 }
 function closeModal(){document.getElementById('ov').classList.remove('open');curId=null;}
 function ovClose(e){if(e.target===document.getElementById('ov'))closeModal();}
@@ -929,9 +1013,6 @@ function drawCharts(){
 }
 
 // ---- SEEDING ----
-let seedDb=JSON.parse(localStorage.getItem('ggs_seed')||'[]');
-let seedEditId=null;
-let seedSk='tanggal',seedSd='desc';
 
 function persistSeed(){localStorage.setItem('ggs_seed',JSON.stringify(seedDb));}
 
@@ -1044,7 +1125,7 @@ function openSeedEdit(id){
   document.getElementById('ov-seed').classList.add('open');
 }
 
-function saveSeed(){
+async function saveSeed(){
   const nama=document.getElementById('s-nama').value.trim();
   const barang=document.getElementById('s-barang').value.trim();
   const tanggal=document.getElementById('s-tanggal').value;
@@ -1058,22 +1139,27 @@ function saveSeed(){
     alamat:document.getElementById('s-alamat').value.trim(),
     notes:document.getElementById('s-notes').value.trim(),
   };
-  if(seedEditId){
-    const i=seedDb.findIndex(x=>x.id===seedEditId);
-    if(i>-1)seedDb[i]=Object.assign({},seedDb[i],data);
-    toast('Seeding diupdate!');
-  }else{
-    seedDb.unshift(Object.assign({id:uid()},data));
-    toast('Seeding ditambahkan!');
-  }
-  persistSeed();closeSeedModal();renderSeeding();
+  try{
+    if(seedEditId){
+      const i=seedDb.findIndex(x=>x.id===seedEditId);
+      if(i>-1)seedDb[i]=Object.assign({},seedDb[i],data);
+      await sbSaveSeeding(seedDb[i>-1?i:0]);
+      toast('Seeding diupdate!');
+    }else{
+      const newRec=Object.assign({id:uid()},data);
+      seedDb.unshift(newRec);
+      await sbSaveSeeding(newRec);
+      toast('Seeding ditambahkan!');
+    }
+    closeSeedModal();renderSeeding();
+  }catch(e){toast('Gagal simpan: '+e.message,'err');}
 }
-
-function delSeed(id){
+async function delSeed(id){
   const s=seedDb.find(x=>x.id===id);
   if(!confirm('Hapus seeding "'+s.barang+'" ke '+s.nama+'?'))return;
   seedDb=seedDb.filter(x=>x.id!==id);
-  persistSeed();renderSeeding();toast('Dihapus.');
+  try{await sbDeleteSeeding(id);}catch(e){toast('Gagal hapus','err');return;}
+  renderSeeding();toast('Dihapus.');
 }
 
 function closeSeedModal(){document.getElementById('ov-seed').classList.remove('open');seedEditId=null;}
@@ -1117,6 +1203,7 @@ function checkLock(){
   if(val===PWD){
     document.getElementById('lock-screen').style.display='none';
     sessionStorage.setItem('ggs_auth','1');
+    initApp();
   }else{
     const err=document.getElementById('lock-err');
     err.textContent='Password salah, coba lagi.';
@@ -1127,10 +1214,8 @@ function checkLock(){
 }
 if(sessionStorage.getItem('ggs_auth')==='1'){
   document.getElementById('lock-screen').style.display='none';
+  initApp();
 }
-
-// INIT
-render();
 </script>
 </body>
 </html>
