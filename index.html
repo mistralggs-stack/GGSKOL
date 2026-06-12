@@ -305,6 +305,7 @@ select.ctrl:focus{border-color:var(--red)}
           <th>Ekspedisi</th>
           <th>No. Resi</th>
           <th>Alamat Kirim</th>
+          <th>Hasil Konten</th>
           <th>Status</th>
           <th></th>
         </tr>
@@ -364,6 +365,29 @@ select.ctrl:focus{border-color:var(--red)}
       <div class="fg full">
         <label>Catatan</label>
         <input type="text" id="s-notes" placeholder="cth: minta review dalam 2 minggu, unboxing video">
+      </div>
+      <div class="fg full" style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <label style="color:var(--red)">Hasil Konten (isi setelah KOL posting)</label>
+      </div>
+      <div class="fg full">
+        <label>Link Konten 1</label>
+        <input type="text" id="s-link1" placeholder="cth: https://www.tiktok.com/@jebsvibe/video/...">
+      </div>
+      <div class="fg full">
+        <label>Link Konten 2 (opsional)</label>
+        <input type="text" id="s-link2" placeholder="cth: https://www.instagram.com/p/...">
+      </div>
+      <div class="fg full">
+        <label>Link Konten 3 (opsional)</label>
+        <input type="text" id="s-link3" placeholder="cth: https://www.youtube.com/watch?v=...">
+      </div>
+      <div class="fg">
+        <label>Views / Impresi</label>
+        <input type="text" id="s-views" placeholder="cth: 45K views, 12K impresi">
+      </div>
+      <div class="fg">
+        <label>Catatan Hasil</label>
+        <input type="text" id="s-hasilnotes" placeholder="cth: engagement bagus, komen positif">
       </div>
     </div>
     <div class="mfooter">
@@ -550,7 +574,9 @@ async function sbSaveSeeding(s){
   await sbFetch('seeding?on_conflict=id','POST',[{
     id:s.id,nama:s.nama,sosmed:s.sosmed||'',tanggal:s.tanggal,
     barang:s.barang,ekspedisi:s.ekspedisi||'',resi:s.resi||'',
-    alamat:s.alamat||'',status:s.status,notes:s.notes||''
+    alamat:s.alamat||'',status:s.status,notes:s.notes||'',
+    link1:s.link1||'',link2:s.link2||'',link3:s.link3||'',
+    views:s.views||'',hasilnotes:s.hasilnotes||''
   }]);
 }
 async function sbDeleteSeeding(id){
@@ -1071,14 +1097,30 @@ function renderSeeding(){
     const resiHtml=s.resi?'<span style="font-family:var(--mono);font-size:11px">'+s.resi+'</span>':'<span style="color:var(--muted)">—</span>';
     const alamatHtml=s.alamat?'<div style="font-size:12px;color:var(--muted2);max-width:180px;line-height:1.4">'+s.alamat+'</div>':'<span style="color:var(--muted)">—</span>';
     const notesHtml=s.notes?'<div style="font-size:11px;color:var(--muted);margin-top:3px">'+s.notes+'</div>':'';
+    // hasil konten
+    const links=[s.link1,s.link2,s.link3].filter(Boolean);
+    let hasilHtml='';
+    if(links.length){
+      hasilHtml=links.map((l,i)=>{
+        const domain=l.includes('tiktok')?'TikTok':l.includes('instagram')?'IG':l.includes('youtube')?'YT':'Link';
+        return '<a href="'+l+'" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-family:var(--mono);color:var(--red);text-decoration:none;margin-right:4px;margin-bottom:3px;padding:2px 8px;border:1px solid var(--red-mid);border-radius:4px;background:var(--red-dim)">'+
+          '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'+
+          domain+(i+1)+'</a>';
+      }).join('');
+      if(s.views) hasilHtml+='<div style="font-size:11px;color:var(--muted);margin-top:2px">👁 '+s.views+'</div>';
+      if(s.hasilnotes) hasilHtml+='<div style="font-size:11px;color:var(--muted2)">'+s.hasilnotes+'</div>';
+    }else{
+      hasilHtml='<span style="color:var(--muted);font-size:12px">Belum ada</span>';
+    }
     return '<tr>'+
       '<td style="white-space:nowrap;font-family:var(--mono);font-size:12px">'+tgl+'</td>'+
       '<td><div style="font-weight:500;font-size:13px">'+s.nama+'</div></td>'+
-      '<td style="font-family:var(--mono);font-size:12px;color:var(--muted2)">'+( s.sosmed||'—')+'</td>'+
+      '<td style="font-family:var(--mono);font-size:12px;color:var(--muted2)">'+(s.sosmed||'—')+'</td>'+
       '<td><div style="font-size:13px;font-weight:500;max-width:200px">'+s.barang+'</div>'+notesHtml+'</td>'+
       '<td style="font-size:12px;color:var(--muted2);white-space:nowrap">'+(s.ekspedisi||'—')+'</td>'+
       '<td>'+resiHtml+'</td>'+
       '<td>'+alamatHtml+'</td>'+
+      '<td style="min-width:120px">'+hasilHtml+'</td>'+
       '<td>'+statusBadge(s.status)+'</td>'+
       '<td><div class="row-acts">'+
         '<button class="act-btn" onclick="openSeedEdit(\''+s.id+'\')">Edit</button>'+
@@ -1091,7 +1133,7 @@ function renderSeeding(){
 function openSeeding(){
   seedEditId=null;
   document.getElementById('seed-modal-title').textContent='Tambah Seeding';
-  ['s-nama','s-sosmed','s-barang','s-ekspedisi','s-resi','s-alamat','s-notes'].forEach(id=>document.getElementById(id).value='');
+  ['s-nama','s-sosmed','s-barang','s-ekspedisi','s-resi','s-alamat','s-notes','s-link1','s-link2','s-link3','s-views','s-hasilnotes'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('s-tanggal').value=new Date().toISOString().slice(0,10);
   document.getElementById('s-status').value='Diproses';
   // populate datalist from db
@@ -1119,6 +1161,11 @@ function openSeedEdit(id){
   document.getElementById('s-resi').value=s.resi||'';
   document.getElementById('s-alamat').value=s.alamat||'';
   document.getElementById('s-notes').value=s.notes||'';
+  document.getElementById('s-link1').value=s.link1||'';
+  document.getElementById('s-link2').value=s.link2||'';
+  document.getElementById('s-link3').value=s.link3||'';
+  document.getElementById('s-views').value=s.views||'';
+  document.getElementById('s-hasilnotes').value=s.hasilnotes||'';
   document.getElementById('ov-seed').classList.add('open');
 }
 
@@ -1135,6 +1182,11 @@ async function saveSeed(){
     resi:document.getElementById('s-resi').value.trim(),
     alamat:document.getElementById('s-alamat').value.trim(),
     notes:document.getElementById('s-notes').value.trim(),
+    link1:document.getElementById('s-link1').value.trim(),
+    link2:document.getElementById('s-link2').value.trim(),
+    link3:document.getElementById('s-link3').value.trim(),
+    views:document.getElementById('s-views').value.trim(),
+    hasilnotes:document.getElementById('s-hasilnotes').value.trim(),
   };
   try{
     if(seedEditId){
