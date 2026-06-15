@@ -552,17 +552,21 @@ async function sbLoadKOL(){
   const rows=await sbFetch('kol?order=follower_raw.desc');
   return rows.map(r=>({...r,snapshots:r.snapshots||[],categories:r.categories||[]}));
 }
-async function sbSaveKOL(r){
-  // upsert single row
-  await sbFetch('kol?on_conflict=id','POST',[{
-    id:r.id,name:r.name,platform:r.platform,handle:r.handle||'',
+async function sbSaveKOL(r, isUpdate=false){
+  const payload={
+    name:r.name,platform:r.platform,handle:r.handle||'',
     followers:r.followers,follower_raw:r.follower_raw,
     er:r.er||'',er_raw:r.er_raw||0,
     categories:r.categories||[],phone:r.phone||'',
     notes:r.notes||'',link:r.link||'',
     snapshots:r.snapshots||[],
     last_updated:r.lastUpdated||Date.now()
-  }]);
+  };
+  if(isUpdate){
+    await sbFetch('kol?id=eq.'+r.id,'PATCH',payload);
+  } else {
+    await sbFetch('kol','POST',[Object.assign({id:r.id},payload)]);
+  }
 }
 async function sbDeleteKOL(id){
   await sbFetch('kol?id=eq.'+id,'DELETE');
@@ -570,14 +574,24 @@ async function sbDeleteKOL(id){
 async function sbLoadSeeding(){
   return await sbFetch('seeding?order=tanggal.desc');
 }
-async function sbSaveSeeding(s){
-  await sbFetch('seeding?on_conflict=id','POST',[{
-    id:s.id,nama:s.nama,sosmed:s.sosmed||'',tanggal:s.tanggal,
-    barang:s.barang,ekspedisi:s.ekspedisi||'',resi:s.resi||'',
-    alamat:s.alamat||'',status:s.status,notes:s.notes||'',
-    link1:s.link1||'',link2:s.link2||'',link3:s.link3||'',
-    views:s.views||'',hasilnotes:s.hasilnotes||''
-  }]);
+async function sbSaveSeeding(s, isUpdate=false){
+  if(isUpdate){
+    await sbFetch('seeding?id=eq.'+s.id,'PATCH',{
+      nama:s.nama,sosmed:s.sosmed||'',tanggal:s.tanggal,
+      barang:s.barang,ekspedisi:s.ekspedisi||'',resi:s.resi||'',
+      alamat:s.alamat||'',status:s.status,notes:s.notes||'',
+      link1:s.link1||'',link2:s.link2||'',link3:s.link3||'',
+      views:s.views||'',hasilnotes:s.hasilnotes||''
+    });
+  } else {
+    await sbFetch('seeding','POST',[{
+      id:s.id,nama:s.nama,sosmed:s.sosmed||'',tanggal:s.tanggal,
+      barang:s.barang,ekspedisi:s.ekspedisi||'',resi:s.resi||'',
+      alamat:s.alamat||'',status:s.status,notes:s.notes||'',
+      link1:s.link1||'',link2:s.link2||'',link3:s.link3||'',
+      views:s.views||'',hasilnotes:s.hasilnotes||''
+    }]);
+  }
 }
 async function sbDeleteSeeding(id){
   await sbFetch('seeding?id=eq.'+id,'DELETE');
@@ -845,7 +859,7 @@ async function saveUpdate(){
   r.snapshots.push({ts:Date.now(),date:toDay(),followers:fol,er:er?parseFloat(er):0,note});
   if(r.snapshots.length>365)r.snapshots=r.snapshots.slice(-365);
   try{
-    await sbSaveKOL(r);
+    await sbSaveKOL(r, true);
     closeModal();render();
     toast(r.name+' diupdate → '+fmtF(fol)+' followers');
   }catch(e){toast('Gagal simpan: '+e.message,'err');}
@@ -904,12 +918,12 @@ async function saveEdit(){
     if(curId){
       const i=db.findIndex(x=>x.id===curId);
       if(i>-1){db[i]=Object.assign({},db[i],rec,{lastUpdated:Date.now()});}
-      await sbSaveKOL(db[i>-1?i:0]);
+      await sbSaveKOL(db[i>-1?i:0], true);
       toast('Data diupdate!');
     }else{
       const newRec=Object.assign({id:uid(),snapshots:folRaw?[{ts:Date.now(),date:toDay(),followers:folRaw,er:parseFloat(er)||0,note:'Initial'}]:[],lastUpdated:Date.now()},rec);
       db.unshift(newRec);
-      await sbSaveKOL(newRec);
+      await sbSaveKOL(newRec, false);
       toast('KOL ditambahkan!');
     }
     closeModal();render();
@@ -1191,13 +1205,15 @@ async function saveSeed(){
   try{
     if(seedEditId){
       const i=seedDb.findIndex(x=>x.id===seedEditId);
-      if(i>-1)seedDb[i]=Object.assign({},seedDb[i],data);
-      await sbSaveSeeding(seedDb[i>-1?i:0]);
+      if(i>-1){
+        seedDb[i]=Object.assign({},seedDb[i],data);
+        await sbSaveSeeding(seedDb[i], true);
+      }
       toast('Seeding diupdate!');
     }else{
       const newRec=Object.assign({id:uid()},data);
       seedDb.unshift(newRec);
-      await sbSaveSeeding(newRec);
+      await sbSaveSeeding(newRec, false);
       toast('Seeding ditambahkan!');
     }
     closeSeedModal();renderSeeding();
